@@ -1,0 +1,87 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: readmissions-codes-codesonly
+  labels:
+    app: readmissions-codes-codesonly
+spec:
+  template:
+    metadata:
+      labels:
+        app: readmissions-codes-codesonly
+    spec:
+      containers:
+        - name: clinical-classification
+          image: <anonymized>
+          command: [
+              "python", "main_supportsetonly_readmissions.py",
+              "fit",
+              "--trainer.accelerator=gpu",
+              "--trainer.devices=1",
+              #"--trainer.strategy=ddp_find_unused_parameters_false",
+              "--trainer.precision=bf16",
+              "--trainer.default_root_dir=/pvc/logs/final_scores/readmissions/codes/codeonly",
+              "--trainer.callbacks=EarlyStopping",
+              "--trainer.callbacks.patience=10",
+              "--trainer.callbacks.mode=max",
+              "--trainer.callbacks.monitor=Val/nDCG@30",
+              "--trainer.callbacks=ModelCheckpoint",
+              "--trainer.callbacks.dirpath=/pvc/final_scores/readmissions/codes/codeonly",
+              "--trainer.callbacks.filename=checkpoint",
+              "--trainer.callbacks.save_top_k=1",
+              "--trainer.callbacks.mode=max",
+              "--trainer.callbacks.monitor=Val/nDCG@30",
+              "--model.num_icd_codes=270",
+              "--seed_everything=42",
+              "--trainer.num_sanity_val_steps=0",
+              "--model.warmup_steps=500",
+              "--model.decay_steps=250000",
+              "--model.lr=1e-4",
+              "--model.num_mh_icd_attn_heads=8",
+              "--model.num_mh_icd_attn_layers=2",
+              "--model.icd_embedding_dim=768",
+              "--model.readmission_task=True",
+              "--data.num_workers=8",
+              "--data.eval_batch_size=128",
+              "--data.batch_size=16",
+              "--data.code_descriptions=/pvc/icd_desc.txt",
+              "--data.umls_text=False",
+              "--data.use_text_descriptions=False",
+              "--data.use_ccs=True",
+              "--data.add_null_everywhere=True",
+              "--data.embedding_only=True",
+              "--data.filename=/pvc/ClinicalOutcomeDecoder/data/mimic3_readmissions_UMLS2021AB.json",
+              "--data.admission_notes=/pvc/ClinicalOutcomeDecoder/data/admission_notes.json",
+          ]
+          env:
+            - name: LANG
+              value: 'C.UTF-8'
+            - name: TOKENIZERS_PARALLELISM
+              value: 'true'
+            - name: NCCL_DEBUG
+              value: 'INFO'
+            - name: TRANSFORMERS_CACHE
+              value: "/pvc/huggingface_cache"
+
+          resources:
+            requests:
+              cpu: "1"
+            limits:
+              nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: cod-shared-pvc
+              mountPath: /pvc
+            - name: dshm
+              mountPath: /dev/shm
+      nodeSelector:
+        gpu: a100
+      volumes:
+        - name: cod-shared-pvc
+          persistentVolumeClaim:
+            claimName: cod-shared-pvc
+        - name: dshm
+          emptyDir:
+            medium: Memory
+      imagePullSecrets:
+        - name: private-registry-auth
+      restartPolicy: Never

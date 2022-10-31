@@ -1,0 +1,5 @@
+from pytorch_lightning.utilities.cli import LightningCLI
+from dataset import MIMICClassificationDataModule
+from code_only_transformer import SupportSetOnlyModel
+
+cli = LightningCLI(SupportSetOnlyModel, MIMICClassificationDataModule, save_config_overwrite=True)

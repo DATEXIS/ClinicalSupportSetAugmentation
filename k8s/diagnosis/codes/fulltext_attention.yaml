@@ -1,0 +1,89 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: diag-codes-fulltextattention-weighted
+  labels:
+    app: diag-codes-fulltextattention-weighted
+spec:
+  template:
+    metadata:
+      labels:
+        app: diag-codes-fulltextattention-weighted
+    spec:
+      containers:
+        - name: clinical-classification
+          image: <anonymized>
+          command: [
+              "python", "main.py",
+              "fit",
+              "--trainer.accelerator=gpu",
+              "--trainer.devices=1",
+              "--trainer.precision=bf16",
+              "--trainer.default_root_dir=/pvc/logs/final_scores/diag/codes/fulltextattention-weighted",
+              "--trainer.check_val_every_n_epoch=1",
+              "--trainer.callbacks=EarlyStopping",
+              "--trainer.callbacks.patience=3",
+              "--trainer.callbacks.mode=max",
+              "--trainer.callbacks.monitor=Val/nDCG@30",
+              "--trainer.callbacks=ModelCheckpoint",
+              "--trainer.callbacks.dirpath=/pvc/final_scores/diag/codes/fulltextattention",
+              "--trainer.callbacks.save_top_k=1",
+              "--trainer.callbacks.filename=checkpoint",
+              "--trainer.callbacks.mode=max",
+              "--trainer.callbacks.monitor=Val/nDCG@30",
+              "--model.num_icd_codes=280",
+              "--data.num_workers=8",
+              "--data.eval_batch_size=128",
+              "--data.batch_size=16",
+              "--seed_everything=42",
+              "--trainer.num_sanity_val_steps=0",
+              "--model.warmup_steps=150",
+              "--model.decay_steps=10000",
+              "--model.lr=1e-4",
+              "--model.encoder_lr=2e-5",
+              "--model.use_intermediate_activation=False",
+              "--model.use_intermediate_ff=False",
+              "--model.use_aggregation=True",
+              "--model.use_sigmoid_attention=False",
+              "--model.num_attention_heads=2",
+              "--model.num_attention_layers=4",
+              "--model.icd_embedding_dim=768",
+              "--model.aggregation_red_dim=512",
+              "--data.data_dir=/pvc/ClinicalOutcomeDecoder/data/ccs2/coP_full",
+              "--data.num_codes_to_add=3",
+              "--data.num_codes_to_add_val=3",
+              "--data.use_ccs=True",
+              "--data.sampling_strategy=weighted",
+              "--data.add_null_everywhere=True"
+          ]
+          env:
+            - name: LANG
+              value: 'C.UTF-8'
+            - name: TOKENIZERS_PARALLELISM
+              value: 'true'
+            - name: NCCL_DEBUG
+              value: 'INFO'
+            - name: TRANSFORMERS_CACHE
+              value: "/pvc/huggingface_cache"
+          resources:
+            requests:
+              cpu: "1"
+            limits:
+              nvidia.com/gpu: "1"
+          volumeMounts:
+            - name: cod-shared-pvc
+              mountPath: /pvc
+            - name: dshm
+              mountPath: /dev/shm
+      nodeSelector:
+        gpu: a100
+      volumes:
+        - name: cod-shared-pvc
+          persistentVolumeClaim:
+            claimName: cod-shared-pvc
+        - name: dshm
+          emptyDir:
+            medium: Memory
+      imagePullSecrets:
+        - name: private-registry-auth
+      restartPolicy: Never

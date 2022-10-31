@@ -1,0 +1,15 @@
+venv/
+data/!/src/analysis.py
+src/__pycache__/
+src/simple_attention_model/__pycache__/
+src/.ipynb_checkpoints/
+src/.pytest_cache/
+src/iframe_figure/
+src/simple_attention_model/.ipynb_checkpoints/
+src/*.pkl
+src/*.pt
+src/*.zst
+src/*.arrow
+src/*.pickle
+src/*.ipynb
+src/iframe_figures/
